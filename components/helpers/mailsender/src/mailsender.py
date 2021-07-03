@@ -27,6 +27,7 @@ TO = os.getenv('TO', '')
 SUBJECT = os.getenv('SUBJECT', DEFAULT_SUBJECT)
 BODY_PLAIN = os.getenv('BODY_PLAIN', DEFAULT_TEXT_MESSAGE)
 BODY_HTML = os.getenv('BODY_HTML', DEFAULT_HTML_MESSAGE)
+BODY_HTML_FILE = os.getenv('BODY_HTML_FILE', None)
 ATTACHMENTS = os.getenv('ATTACHMENTS', None)
 IMAGE_ATTACHMENTS = os.getenv('IMAGE_ATTACHMENTS', None)
 PORT = int(os.getenv('PORT', DEFAULT_SMTP_PORT))
@@ -41,6 +42,17 @@ steam_handler = logging.StreamHandler()
 steam_handler.setFormatter(formatter)
 logger.addHandler(steam_handler)
 logger.setLevel(logging.WARN)
+
+
+if BODY_HTML_FILE is not None:
+    logger.info("Using HTML file as html content")
+    try:
+        with open(BODY_HTML_FILE, 'r') as f:
+            BODY_HTML = f.read()
+    except FileNotFoundError as e:
+        logger.error(f"Error opening HTML file {BODY_HTML_FILE}")
+        logger.error("Continuing with provided BODY_HTML if any.")
+
 
 class EmailNotify():
     
@@ -87,12 +99,6 @@ class EmailNotify():
         if TIMEOUT is not None and is_valid_timeout(TIMEOUT):
             timeout = float(TIMEOUT)
 
-        # if body_html_filename is not None:
-        #     try:
-        #         with open(body_html_filename, 'r') as f:
-        #             body_html = f.read()
-        #     except FileNotFoundError as e:
-        #         self.fail(message=f'{BASE_FAILED_MESSAGE}: {str(e)}')
 
         # create a message
         msgRoot = MIMEMultipart('related')
