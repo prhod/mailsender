@@ -4,6 +4,7 @@ import logging
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
+from email.mime.image import MIMEImage
 
 DEFAULT_SMTP_PORT = 587
 DEFAULT_TIMEOUT = '10'
@@ -14,7 +15,8 @@ DEFAULT_USE_TLS = False
 
 DEFAULT_FROM = "from@example.com"
 DEFAULT_SUBJECT = "mailsender - default suject"
-DEFAULT_TEXT_MESSAGE = "Email sent from mail sender"
+DEFAULT_TEXT_MESSAGE = ""
+DEFAULT_HTML_MESSAGE = "Email sent from <b>mailsender</b>"
 BASE_SUCCESS_MESSAGE = 'The mail has been sent successfully'
 BASE_FAILED_MESSAGE = 'Failed to send email'
 
@@ -24,8 +26,9 @@ FROM = os.getenv('FROM', DEFAULT_FROM)
 TO = os.getenv('TO', '')
 SUBJECT = os.getenv('SUBJECT', DEFAULT_SUBJECT)
 BODY_PLAIN = os.getenv('BODY_PLAIN', DEFAULT_TEXT_MESSAGE)
-BODY_HTML = os.getenv('BODY_HTML', DEFAULT_TEXT_MESSAGE)
-
+BODY_HTML = os.getenv('BODY_HTML', DEFAULT_HTML_MESSAGE)
+ATTACHMENTS = os.getenv('ATTACHMENTS', None)
+IMAGE_ATTACHMENTS = os.getenv('IMAGE_ATTACHMENTS', None)
 PORT = int(os.getenv('PORT', DEFAULT_SMTP_PORT))
 TIMEOUT = os.getenv('TIMEOUT', DEFAULT_TIMEOUT)
 DEBUG_LEVEL = int(os.getenv('DEBUG_LEVEL', 0))
@@ -37,7 +40,7 @@ formatter = logging.Formatter('%(asctime)s :: %(levelname)s :: %(message)s')
 steam_handler = logging.StreamHandler()
 steam_handler.setFormatter(formatter)
 logger.addHandler(steam_handler)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.WARN)
 
 class EmailNotify():
     
@@ -51,10 +54,24 @@ class EmailNotify():
                         Name=base_name
                     )
                 part['Content-Disposition'] = f'attachment; filename="{base_name}"'
+                logger.info(f'attaching {base_name}')
                 message.attach(part)
             except FileNotFoundError:
-                self.fail(f'Failed to add an attachment. No such file {base_name}')
+                logger.error(f'Failed to add an attachment. No such file {base_name}')
+                exit(1)
 
+    def add_image_attachments(self, message, attachments=None):
+        for attachment in attachments or []:
+            base_name = os.path.basename(attachment)
+            try:
+                with open(attachment, "rb") as f:
+                    msgImage = MIMEImage(f.read())
+                msgImage.add_header('Content-ID', f'<{base_name}>')
+                logger.info(f'attaching {base_name}')
+                message.attach(msgImage)
+            except FileNotFoundError:
+                logger.error(f'Failed to add an attachment. No such file {base_name}')
+                exit(1)
     def run(self):
         if PORT not in STANDARD_SMTP_PORTS:
             logger.warning((
@@ -78,55 +95,52 @@ class EmailNotify():
         #         self.fail(message=f'{BASE_FAILED_MESSAGE}: {str(e)}')
 
         # create a message
-        msg = MIMEMultipart('alternative')
-        msg['FROM'] = FROM
-        msg['TO'] = TO
-        msg['Subject'] = SUBJECT
+        msgRoot = MIMEMultipart('related')
+        msgRoot['FROM'] = FROM
+        msgRoot['TO'] = TO
+        msgRoot['Subject'] = SUBJECT
+        msgRoot.preamble = '====================================================='
 
         # send both html and text
-        part1 = MIMEText(BODY_PLAIN, 'plain', _charset='utf-8')
-        part2 = MIMEText(BODY_HTML, 'html', _charset='utf-8')
+        if BODY_PLAIN:
+            msgAlternative = MIMEMultipart('alternative')
+            msgText = MIMEText(BODY_PLAIN, 'plain', _charset='utf-8')
+            msgAlternative.attach(msgText)
+            msgRoot.attach(msgAlternative)
+        if BODY_HTML:
+            msgText = MIMEText(BODY_HTML, 'html', _charset='utf-8')
+            msgAlternative.attach(msgText)
 
-        msg.attach(part1)
-        msg.attach(part2)
+        if ATTACHMENTS is not None:
+            self.add_attachments(msgRoot, ATTACHMENTS.split(','))
 
-        # if attachments is not None:
-        #     self.add_attachments(msg, attachments.split(','))
+        if IMAGE_ATTACHMENTS is not None:
+            self.add_image_attachments(msgRoot, IMAGE_ATTACHMENTS.split(','))
 
         logger.info('Sending email...')
 
         result = None
 
         try:
-            logger.debug('Creating SMTP')
             smtp = smtplib.SMTP(HOST, PORT, timeout=timeout)
-            logger.debug('Set debug level')
             smtp.set_debuglevel(DEBUG_LEVEL)
             if USE_TLS or PASSWORD:
                 logger.info("using TLS")
-                logger.debug("USERNAME: " + USERNAME)
                 smtp.starttls()
             else:
                 logger.debug("not using TLS")
             smtp.login(USERNAME, PASSWORD)
-            smtp.send_message(msg)
+            smtp.send_message(msgRoot)
             result = smtp.noop()
             smtp.quit()
         # connection error or timeout
         except OSError as e:
             logger.error(e)
-            # self.fail(message=(
-            #     f'{BASE_FAILED_MESSAGE} to {TO}. '
-            #     f'Check your configuration settings'
-            #     f'{(f": {e}" if DEBUG else f".")}'
-            # ))
+            exit(1)
 
         if result is None or result[0] != SMTP_OK_STATUS_CODE:
             logger.error(BASE_FAILED_MESSAGE)
-            # self.fail(message=(
-            #     f'{BASE_FAILED_MESSAGE} to {TO}. '
-            #     f'{(f": response {result}" if DEBUG else f".")}'
-            # ))
+            exit(1)
         else:
             logger.info(f'{BASE_SUCCESS_MESSAGE} to {TO}')
 
