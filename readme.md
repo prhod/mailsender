@@ -1,6 +1,7 @@
 # mailsender
 
 This component aims to ease sending mail.  
+
 To use it using docker, first build the image:
 ```bash
 docker build . -t mailsender
@@ -25,3 +26,5 @@ docker run  \
 As an early version, there may be unexpected behaviour if 2 files with the same name are added.
 
 It is possible to provide HTML as a file with `BODY_HTML_FILE`. If the file does not exists, `BODY_HTML` will be used.
+
+Using a `USERNAME` and a `PASSWORD` forces the use of TLS. 

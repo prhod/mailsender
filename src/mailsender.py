@@ -11,7 +11,6 @@ DEFAULT_TIMEOUT = '10'
 SMTP_OK_STATUS_CODE = 250
 STANDARD_SMTP_PORTS = (25, 465, 587, 2525)
 DEFAULT_HOST = "localhost"
-DEFAULT_USE_TLS = False 
 
 DEFAULT_FROM = "from@example.com"
 DEFAULT_SUBJECT = "mailsender - default suject"
@@ -34,7 +33,6 @@ PORT = int(os.getenv('PORT', DEFAULT_SMTP_PORT))
 TIMEOUT = os.getenv('TIMEOUT', DEFAULT_TIMEOUT)
 DEBUG_LEVEL = int(os.getenv('DEBUG_LEVEL', 0))
 HOST = os.getenv('HOST', DEFAULT_HOST)
-USE_TLS = bool(os.getenv('USE_TLS', DEFAULT_USE_TLS))
 
 logger = logging.getLogger(__name__)
 formatter = logging.Formatter('%(asctime)s :: %(levelname)s :: %(message)s')
@@ -128,15 +126,14 @@ class EmailNotify():
         result = None
 
         try:
-            logger.error(f'PASSWORD {PASSWORD}')
             smtp = mysmtp.mySMTP(HOST, PORT, timeout=timeout)
             smtp.set_debuglevel(DEBUG_LEVEL)
-            if USE_TLS or PASSWORD:
-                logger.info("using TLS")
+            if PASSWORD:
+                logger.info("using Auth (with TLS)")
                 smtp.starttls()
+                smtp.login(USERNAME, PASSWORD)
             else:
-                logger.debug("not using TLS")
-            smtp.login(USERNAME, PASSWORD)
+                logger.debug("not using Auth")
             smtp.send_message(msgRoot)
             result = smtp.noop()
             smtp.quit()
