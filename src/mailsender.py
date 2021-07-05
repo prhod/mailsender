@@ -1,5 +1,5 @@
 import os
-import smtplib
+import mysmtp
 import logging
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -128,7 +128,8 @@ class EmailNotify():
         result = None
 
         try:
-            smtp = smtplib.SMTP(HOST, PORT, timeout=timeout)
+            logger.error(f'PASSWORD {PASSWORD}')
+            smtp = mysmtp.mySMTP(HOST, PORT, timeout=timeout)
             smtp.set_debuglevel(DEBUG_LEVEL)
             if USE_TLS or PASSWORD:
                 logger.info("using TLS")
